@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>寻获真我 - 典藏单机版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,900&display=swap');
+
+        :root {
+            --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            --font-display: 'Playfair Display', serif;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #0f172a;
+            font-family: var(--font-sans);
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .font-display {
+            font-family: var(--font-display);
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            pointer-events: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Animations */
+        @keyframes shake {
+            0%, 100% {
+                transform: rotate(0) translateY(0);
+            }
+
+            25% {
+                transform: rotate(-8deg) translateY(-20px);
+            }
+
+            50% {
+                transform: rotate(8deg) translateY(0);
+            }
+
+            75% {
+                transform: rotate(-8deg) translateY(-20px);
+            }
+        }
+
+        .shaking {
+            animation: shake 0.4s infinite ease-in-out;
+        }
+
+        @keyframes stageIn {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -30%) scale(0.8);
+            }
+
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+
+            80% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -70%) scale(1.2);
+            }
+        }
+
+        .stage-anim {
+            animation: stageIn 2.5s forwards;
+            display: block !important;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .typewriter-cursor::after {
+            content: '|';
+            position: absolute;
+            margin-left: 2px;
+            animation: blink 0.8s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        /* Custom scrollbar-like hide */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Mobile Specific fixes for full height */
+        @supports (-webkit-touch-callout: none) {
+            #game-container {
+                height: -webkit-fill-available;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container" class="bg-slate-900">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- UI Layer -->
+        <div id="ui-layer" class="overlay">
+
+            <!-- 1. START SCREEN -->
+            <div id="start-screen" class="interactive flex flex-col items-center justify-center space-y-8 transition-all duration-1000 z-50 w-full px-6">
+                <div class="text-center relative">
+                    <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-40 bg-amber-500/10 blur-3xl rounded-full"></div>
+                    <h1 class="text-6xl md:text-8xl font-display text-amber-100 italic drop-shadow-2xl relative">寻获真我</h1>
+                    <p class="text-amber-100/40 text-[10px] md:text-xs tracking-[0.4em] uppercase mt-4">Discover Your True Self</p>
+                </div>
+
+                <div id="best-score-container" class="opacity-0 transition-opacity duration-1000 flex flex-col items-center gap-1">
+                    <span class="text-[9px] text-slate-500 uppercase tracking-widest font-black">历史最佳里程</span>
+                    <div id="best-score-display" class="text-xl font-black text-amber-500/60 tabular-nums">0m</div>
+                </div>
+
+                <button onclick="goIntro()" class="group relative px-12 md:px-16 py-4 md:py-5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_20px_50px_rgba(245,158,11,0.3)] overflow-hidden">
+                    <span class="relative">开启寻己航程</span>
+                </button>
+            </div>
+
+            <!-- 2. INTRO TEXT (Typewriter) -->
+            <div id="intro-screen" class="absolute inset-0 bg-slate-950/85 backdrop-blur-md hidden flex-col items-center justify-start pt-20 md:justify-center p-6 md:p-12 transition-opacity duration-1000 z-50">
+                <div class="h-[75vh] w-full relative overflow-hidden flex flex-col items-center justify-center pointer-events-none">
+                    <div id="intro-text-container" class="w-full max-w-2xl flex flex-col items-center text-center gap-2 md:gap-3 transition-all duration-1000 ease-in-out">
+                        <!-- Lines injected here -->
+                    </div>
+                </div>
+                <button onclick="goGuide()" class="interactive absolute bottom-12 left-1/2 -translate-x-1/2 px-6 py-2 text-[10px] text-sky-200/40 uppercase tracking-[0.2em] hover:text-sky-300 transition-all border border-white/5 rounded-full backdrop-blur-sm bg-white/5">
+                    直接启程 [Skip]
+                </button>
+            </div>
+
+            <!-- 3. GUIDE SCREEN -->
+            <div id="guide-screen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-3xl hidden flex-col items-center justify-start p-4 md:p-8 transition-opacity duration-1000 z-50 overflow-y-auto">
+                <div class="max-w-sm w-full flex flex-col items-center gap-4 md:gap-6 py-4 md:py-8">
+                    <div class="text-center space-y-1 md:space-y-2 w-full">
+                        <div class="text-sky-500 font-black text-[7px] md:text-[8px] tracking-[0.4em] uppercase opacity-60">Odyssey Guide</div>
+                        <h2 class="text-lg md:text-xl font-display font-medium text-white italic">航行指引</h2>
+                        <p class="text-slate-500 text-[8px] md:text-[10px] tracking-widest mt-1">识别幻象(避)，寻获真实(拾)。</p>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 md:gap-3 w-full" id="guide-grid">
+                        <!-- Symbols injected here -->
+                    </div>
+
+                    <div class="w-full space-y-3">
+                        <div class="p-4 bg-white/[0.02] rounded-2xl border border-white/10 text-center">
+                            <div class="flex flex-col md:flex-row gap-2 md:gap-8 justify-center text-[10px] md:text-xs">
+                                <div class="flex items-center gap-2 justify-center opacity-60"><div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div> 躲避负累</div>
+                                <div class="flex items-center gap-2 justify-center opacity-60"><div class="w-1.5 h-1.5 rounded-full bg-cyan-400"></div> 拾取本真</div>
+                            </div>
+                        </div>
+
+                        <button onclick="startGame()" class="interactive w-full py-3.5 md:py-5 bg-sky-500 hover:bg-sky-400 text-white rounded-xl font-black transition-all shadow-lg shadow-sky-500/20 text-sm md:text-base hover:scale-[1.02] active:scale-95">
+                            开始奔赴
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. HUD -->
+            <div id="hud" class="absolute top-0 left-0 w-full p-4 md:p-8 flex justify-between items-start pointer-events-none opacity-0 transition-opacity duration-500 z-40">
+                <div class="space-y-2 md:space-y-4">
+                    <div class="bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl md:rounded-2xl p-3 md:p-5 flex flex-col items-start gap-1">
+                        <span class="text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-black">里程</span>
+                        <div id="hud-distance" class="text-xl md:text-3xl font-black text-white tabular-nums drop-shadow-md">0<span class="text-[10px] md:text-sm ml-1 opacity-50">m</span></div>
+                    </div>
+                    <div id="hud-stage-pill" class="bg-amber-500/20 text-amber-400 px-2 md:px-3 py-1 rounded-full border border-amber-500/30 text-[8px] md:text-[10px] font-bold uppercase tracking-widest leading-none flex items-center h-5 md:h-6">
+                        Stage 1: 迷雾海域
+                    </div>
+                </div>
+                <div class="flex flex-col items-end gap-2 md:gap-3 text-right">
+                    <div id="lives-container" class="flex gap-1 p-1.5 bg-black/20 rounded-lg"></div>
+                    <div class="bg-black/40 backdrop-blur-md px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl border border-white/10">
+                        <span class="text-[8px] md:text-[9px] text-slate-400 block uppercase font-bold mb-1">连航</span>
+                        <div id="hud-combo" class="text-base md:text-xl font-black text-amber-400 italic tabular-nums line-height-none">x0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STAGE NOTICE -->
+            <div id="stage-notice" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none z-60 hidden">
+                <div class="text-amber-400 font-display font-black text-6xl md:text-7xl italic drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]">STAGE UP</div>
+                <div id="stage-name-notice" class="text-white font-black text-xl md:text-2xl tracking-[0.5em] mt-2 opacity-80 uppercase"></div>
+            </div>
+
+            <!-- 5. SETTLEMENT SCREEN (GameOver) -->
+            <div id="settlement-screen" class="absolute inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4 md:p-6 transition-opacity duration-500 z-50">
+                <div class="max-w-md w-full bg-white rounded-[2rem] md:rounded-[2.5rem] p-8 md:p-10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-white/40 relative overflow-hidden text-slate-900 mx-auto">
+                    <div class="absolute -top-24 -right-24 w-64 h-64 bg-amber-100/50 blur-[100px] rounded-full"></div>
+                    <div class="text-center space-y-6 md:space-y-8 relative z-10 w-full flex flex-col items-center">
+                        <div class="w-full">
+                            <h2 class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-4">奥德赛航程圆满</h2>
+                            <div class="inline-flex p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] bg-amber-50 border border-amber-100 mb-2">
+                                <svg id="settlement-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" md:width="48" md:height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500"></svg>
+                            </div>
+                            <div id="final-desc" class="text-[10px] md:text-xs font-bold text-slate-500 tracking-[0.1em] mt-2 italic">初见心海</div>
+                        </div>
+                        <div class="space-y-3 w-full">
+                            <div id="final-rating" class="text-2xl md:text-3xl font-display font-black text-slate-950 italic">稳航者</div>
+                            <p id="final-feedback" class="text-slate-500 text-xs md:text-sm leading-relaxed italic px-2">“ 每一次出发，都是对生命意义的一次拓荒。 ”</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 md:gap-4 w-full">
+                            <div class="bg-slate-50 p-4 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100">
+                                <span class="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase">里程得分</span>
+                                <div id="final-score" class="text-xl md:text-2xl font-bold text-slate-900 tabular-nums font-display">0</div>
+                            </div>
+                            <div class="bg-slate-50 p-4 md:p-5 rounded-2xl md:rounded-3xl border border-slate-100">
+                                <span class="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase">最高连航</span>
+                                <div id="final-combo" class="text-xl md:text-2xl font-bold text-amber-500 tabular-nums font-display">0</div>
+                            </div>
+                        </div>
+                        <div class="space-y-3 md:space-y-4 pt-4 w-full">
+                            <button onclick="goFortune()" class="interactive w-full py-4 bg-slate-950 hover:bg-slate-900 text-white rounded-2xl font-black transition-all shadow-xl shadow-slate-900/20 hover:scale-[1.02] active:scale-95">
+                                启签 · 领取今日寄语
+                            </button>
+                            <button onclick="location.reload()" class="interactive w-full py-2 text-slate-400 hover:text-slate-600 text-[13px] font-medium">
+                                再次启航
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. FORTUNE CARD SCREEN -->
+            <div id="fortune-screen" class="interactive absolute inset-0 bg-[#fffcf5]/90 backdrop-blur-sm hidden opacity-0 transition-opacity duration-1000 items-center justify-center p-4 md:p-6 z-50 overflow-y-auto">
+                <!-- Shaker State -->
+                <div id="shaker-state" class="text-center space-y-8 md:space-y-12 w-full flex flex-col items-center py-10">
+                    <div class="space-y-4">
+                        <h2 class="text-4xl md:text-5xl font-display font-black text-slate-950 italic">心海启签</h2>
+                        <p class="text-slate-500 text-base md:text-lg font-medium italic">风平浪静，听见你内心的回响</p>
+                    </div>
+                    <div id="sign-canister" class="relative group">
+                        <div class="w-40 h-64 md:w-48 md:h-72 mx-auto bg-white rounded-[2.5rem] md:rounded-[3rem] border border-amber-200 shadow-[0_40px_100px_-15px_rgba(245,158,11,0.2)] flex flex-col items-center justify-center gap-6 overflow-hidden">
+                            <div class="w-2 h-32 md:h-40 bg-amber-400/10 rounded-full relative overflow-hidden">
+                                <div id="canister-progress" class="absolute top-0 left-0 w-full h-10 bg-amber-400 rounded-full" style="transform: translateY(-100%)"></div>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" md:width="48" md:height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-3.5-6.5c0 2.5-1.5 4.9-3.5 6.5S6 13 6 15a7 7 0 0 0 7 7z" /><path d="M12 17v-4" /><path d="M10 15h4" /></svg>
+                        </div>
+                    </div>
+                    <button id="reveal-btn" onclick="revealFortune()" class="px-12 md:px-16 py-4 md:py-5 bg-slate-950 hover:bg-slate-900 text-white rounded-full font-black text-base md:text-lg transition-all shadow-2xl hover:scale-105 active:scale-95">
+                        摇取签文
+                    </button>
+                </div>
+                <!-- Card State -->
+                <div id="card-state" class="max-w-sm w-full hidden flex flex-col items-center fade-in py-10">
+                    <div class="bg-white rounded-[2.5rem] md:rounded-[3.5rem] border border-amber-100 shadow-[0_50px_120px_-20px_rgba(0,0,0,0.15)] overflow-hidden relative w-full">
+                        <div class="p-8 md:p-10 space-y-8 md:space-y-10 text-center flex flex-col items-center">
+                            <div class="space-y-4 flex flex-col items-center w-full">
+                                <div id="card-icon-box" class="inline-flex p-5 rounded-[2rem] md:rounded-[2.5rem] bg-slate-50 border border-slate-100">
+                                    <svg id="card-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" md:width="40" md:height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></svg>
+                                </div>
+                                <h3 id="card-title" class="text-3xl md:text-4xl font-display font-black text-slate-950 italic line-height-tight"></h3>
+                                <div id="card-type" class="text-[8px] md:text-[10px] font-black text-slate-400 tracking-[0.4em] uppercase"></div>
+                            </div>
+                            <div class="space-y-4 md:space-y-6 w-full">
+                                <div id="card-tagline" class="text-lg md:text-xl font-bold text-slate-800 leading-tight"></div>
+                                <p id="card-content" class="text-slate-500 text-[11px] md:text-[13px] leading-relaxed italic px-2"></p>
+                            </div>
+                            <div class="pt-6 md:pt-8 border-t border-slate-100 w-full">
+                                <div class="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase tracking-[0.3em] mb-2">心境寄语</div>
+                                <div id="card-motto" class="text-amber-600 font-display font-black text-xl md:text-2xl"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-8 grid grid-cols-2 gap-3 md:gap-4 w-full">
+                        <button onclick="location.reload()" class="py-4 md:py-5 bg-slate-100 text-slate-600 rounded-[1.5rem] md:rounded-3xl font-black text-[10px] md:text-xs">再次启航</button>
+                        <button class="py-4 md:py-5 bg-slate-950 text-white rounded-[1.5rem] md:rounded-3xl font-black text-[10px] md:text-xs shadow-xl">保存签卡</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA & CONFIG ---
+        const introLines = [
+            "在这个被称为‘奥德赛’的人生阶段，",
+            "我们总是被迫赶路，在虚像中透支当下。",
+            "大家害怕被落下，恐惧被定义的失败。",
+            "甚至在毫无意义的‘执念’中反复消耗自身。",
+            "但请记得：在这无垠的心海上，",
+            "每一次不完美的转向，都不是偏离航向。",
+            "人生不是一场必须全速冲刺的短路，",
+            "而是在变动中寻找自我锚点的奥德赛。",
+            "学会松弛，接纳所有的不期而遇，",
+            "握紧属于你自己的、并不完美的舵柄。",
+            "你不必时刻追赶他人的闪亮光影，",
+            "稳住本心，便是最好的归航。"
+        ];
+
+        const symbols = [
+            { svg: '<circle cx="12" cy="12" r="9" opacity="0.3"/><path d="M12 8v8M8 12h8"/>', color: 'text-slate-400', name: '乱流', action: '避', mean: '干扰航向' },
+            { svg: '<path d="M2 12h20M2 17h20M2 7h20"/>', color: 'text-sky-400', name: '浪涛', action: '避', mean: '外界纷扰' },
+            { svg: '<rect width="18" height="6" x="3" y="9" rx="2"/><path d="M7 9v6M17 9v6"/>', color: 'text-amber-800', name: '负累', action: '避', mean: '徒增消耗' },
+            { svg: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>', color: 'text-amber-300', name: '星光', action: '拾', mean: '理想提速' },
+            { svg: '<circle cx="12" cy="12" r="10"/><path d="M7 12h10"/>', color: 'text-cyan-400', name: '松弛', action: '拾', mean: '抵御波折' },
+        ];
+
+        const fortuneLibrary = {
+            'stargazer': { title: '逐星签', tagline: '乘风逐海，心有星光', content: '长路风浪皆为序章，执意奔赴自有回响。您敢于突破安稳、主动前行，这份热烈与笃定，终将托您跨越所有迷茫。', motto: '笃行不怠，自有远方。', type: '奔赴 · 成长 · 笃定', color: 'text-amber-500', icon: '<circle cx="12" cy="12" r="4"/><path d="m19 12-2 2"/><path d="m5 12 2-2"/><path d="m12 19 2-2"/><path d="m12 5-2 2"/><path d="m16.5 16.5-1.5-1.5"/><path d="m16.5 7.5-1.5 1.5"/><path d="m7.5 7.5 1.5 1.5"/><path d="m7.5 16.5 1.5-1.5"/>' },
+            'steady': { title: '安航签', tagline: '心舟稳渡，四海皆安', content: '您已深谙生活的节奏，不慌不躁、不疾不虚。懂得在风浪中稳住船舵，在前行中善待自我。人生最好的状态从不是全速狂奔，而是步履不停。', motto: '稳住本心，便是圆满。', type: '安稳 · 通透 · 顺遂', color: 'text-sky-500', icon: '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>' },
+            'dormant': { title: '蛰伏签', tagline: '静守留白，厚积待发', content: '短暂的无风与停滞，从来不是辜负时光，而是命运的温柔蓄力。那些默默熬过去的空传、扛下来的迷茫，都在悄悄沉淀为您的底气。', motto: '接纳停滞，亦是成长。', type: '沉淀 · 等待 · 蓄力', color: 'text-black', icon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>' },
+            'relaxed': { title: '归静签', tagline: '慢渡心海，万事从容', content: '世人皆慌于赶路，唯静者可渡长路。不必逼迫自己即刻抵达，允许松弛、允许停顿、允许慢慢来。心稳下来，路自然会清晰。', motto: '松弛有度，方得始终。', type: '松弛 · 休整 · 留白', color: 'text-emerald-500', icon: '<path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>' },
+            'clear': { title: '澄心签', tagline: '除却执念，轻装前行', content: '您敢于舍弃短期浮华、放下内耗执念，便是最大的通透。人生本是一场减法，卸下多余的期待与捆绑，心舟方可顺遂远航。之后无牵无挂。', motto: '放下内耗，自在随风。', type: '通透 · 放下 · 觉醒', color: 'text-cyan-500', icon: '<path d="M17.5 19c.7 0 1.3-.2 1.8-.7s.7-1.1.7-1.8c0-1.5-1.2-2.8-2.7-2.8H15c-1.5 0-2.8 1.2-2.8 2.7 0 1.5 1.3 2.6 2.8 2.6z"/><path d="M17.5 14c-.8 0-1.5-.7-1.5-1.5S16.7 11 17.5 11 19 11.7 19 12.5s-.7 1.5-1.5 1.5z"/><path d="M5 19c1.5 0 2.8-1.2 2.8-2.7 0-1.5-1.2-2.7-2.8-2.7s-2.7 1.2-2.7 2.7c0 1.5 1.2 2.7 2.7 2.7z"/>' }
+        };
+
+        // --- ENGINE VARS ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let state = {
+            screen: { w: window.innerWidth, h: window.innerHeight },
+            gameState: 'START',
+            playerX: window.innerWidth / 2,
+            targetX: window.innerWidth / 2,
+            speed: 8,
+            distance: 0,
+            bestDistance: parseInt(localStorage.getItem('odyssey_best_distance') || '0'),
+            stage: 1,
+            strain: 0,
+            lives: 3,
+            combo: 0,
+            maxCombo: 0,
+            score: 0,
+            obstacles: [],
+            collectibles: [],
+            spawnTimer: 0,
+            collectibleTimer: 100,
+            deadWindTimer: 0,
+            boostTimer: 0,
+            invincible: 0,
+            shieldActive: 0,
+            lastTime: 0,
+            stars: Array.from({ length: 120 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 2.5 + 0.5, o: Math.random() })),
+            stats: { totalTime: 0, aggressive: 0, relaxCollected: 0, obsession: 0, stags: 0 }
+        };
+
+        const sounds = {
+            bgm: new Howl({ src: ['https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3'], loop: true, volume: 0.3 }),
+            collect: new Howl({ src: ['https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3'], volume: 0.2 }),
+            hit: new Howl({ src: ['https://assets.mixkit.co/sfx/preview/mixkit-falling-on-metal-749.mp3'], volume: 0.4 }),
+            relax: new Howl({ src: ['https://assets.mixkit.co/sfx/preview/mixkit-wind-swept-1159.mp3'], volume: 0.3 })
+        };
+
+        // --- FLOW LOGIC ---
+        function playSound(name) {
+            if (name === 'collect') sounds.collect.play();
+            if (name === 'hit') sounds.hit.play();
+            if (name === 'relax' || name === 'shield') sounds.relax.play();
+            if (name === 'gameover') sounds.hit.play();
+        }
+
+        function initStartScreen() {
+            if (state.bestDistance > 0) {
+                document.getElementById('best-score-display').innerText = `${Math.floor(state.bestDistance)}m`;
+                document.getElementById('best-score-container').classList.remove('opacity-0');
+            }
+            // Init meteors
+            state.meteors = Array.from({ length: 5 }, () => ({
+                x: Math.random() * state.screen.w,
+                y: Math.random() * state.screen.h,
+                len: Math.random() * 80 + 40,
+                speed: Math.random() * 15 + 10,
+                op: 0
+            }));
+        }
+        initStartScreen();
+
+        function goIntro() {
+            document.getElementById('start-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('start-screen').style.display = 'none';
+                document.getElementById('intro-screen').classList.remove('hidden');
+                state.gameState = 'INTRO';
+                startIntroText();
+            }, 700);
+        }
+
+        async function startIntroText() {
+            const container = document.getElementById('intro-text-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            for (let i = 0; i < introLines.length; i++) {
+                if (state.gameState !== 'INTRO') return;
+
+                const p = document.createElement('p');
+                p.className = "text-sm md:text-lg font-display font-medium leading-relaxed text-sky-100 italic tracking-[0.2em] typewriter-cursor transition-all duration-1000 opacity-0 relative px-4";
+                const line = introLines[i];
+                container.appendChild(p);
+
+                // Allow a tiny delay for layout
+                await new Promise(r => requestAnimationFrame(r));
+
+                // Keep the last line mostly visible at bottom
+                p.style.opacity = '1';
+                p.style.transform = 'scale(1)';
+
+                // Typing effect
+                for (let charIdx = 1; charIdx <= line.length; charIdx++) {
+                    if (state.gameState !== 'INTRO') return;
+                    p.innerText = line.slice(0, charIdx);
+                    await new Promise(r => setTimeout(r, 90));
+                }
+
+                p.classList.remove('typewriter-cursor');
+                p.classList.add('text-sky-100/20', 'scale-90', 'blur-[1px]');
+
+                await new Promise(r => setTimeout(r, 600));
+            }
+            setTimeout(goGuide, 1800);
+        }
+
+        function goGuide() {
+            if (state.gameState === 'PLAYING') return;
+            state.gameState = 'GUIDE';
+            document.getElementById('intro-screen').style.opacity = '0';
+            const grid = document.getElementById('guide-grid');
+            grid.innerHTML = symbols.map(s => `
+                    <div class="flex flex-col items-center justify-center p-2.5 md:p-4 bg-white/[0.04] rounded-2xl border border-white/10 text-center relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 px-2 py-0.5 text-[8px] font-black italic ${s.action === '避' ? 'bg-rose-500/80 text-white' : 'bg-cyan-400/80 text-slate-950'} z-10">${s.action}</div>
+                        <div class="mb-1.5 p-2 rounded-xl bg-white/5 ${s.color} flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg width="16" height="16" md:width="22" md:height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${s.svg}</svg>
+                        </div>
+                        <div class="space-y-0.5">
+                            <div class="text-[10px] md:text-xs font-black text-white italic">${s.name}</div>
+                            <div class="text-[7px] md:text-[9px] text-slate-500 font-medium leading-none opacity-80">${s.mean}</div>
+                        </div>
+                    </div>
+                `).join('');
+
+            setTimeout(() => {
+                document.getElementById('intro-screen').classList.add('hidden');
+                document.getElementById('guide-screen').style.display = 'flex';
+                document.getElementById('guide-screen').classList.remove('hidden');
+            }, 500);
+        }
+
+        function startGame() {
+            document.getElementById('guide-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('guide-screen').classList.add('hidden');
+                document.getElementById('hud').classList.remove('opacity-0');
+                state.gameState = 'PLAYING';
+                sounds.bgm.play();
+            }, 600);
+        }
+
+        // --- ENGINE LOOP ---
+        function update(dt) {
+            state.stats.totalTime += dt;
+
+            // Stars twinkle
+            state.stars.forEach(s => { s.o = 0.2 + Math.abs(Math.sin(Date.now() / 700 + s.x * 20)) * 0.6; });
+
+            // Meteors
+            if (state.meteors) {
+                const bgSpeed = state.gameState === 'PLAYING' ? state.speed : 15;
+                state.meteors.forEach(m => {
+                    m.y += bgSpeed * dt * 0.5;
+                    m.x -= bgSpeed * 0.15 * dt;
+                    if (m.y > state.screen.h + 100) {
+                        m.y = -100; m.x = Math.random() * state.screen.w;
+                    }
+                });
+            }
+
+            if (state.gameState !== 'PLAYING') return;
+
+            // Speed logic
+            if (state.deadWindTimer > 0) {
+                state.deadWindTimer -= dt;
+                state.stats.stags += dt;
+                state.speed = Math.max(6, state.speed - 0.35 * dt);
+            } else if (state.boostTimer > 0) {
+                state.boostTimer -= dt;
+                state.speed = Math.min(70, state.speed + 0.8 * dt);
+            } else {
+                let speedGrowth = 0.02;
+                let maxSpeed = 60;
+
+                // Slower rhythm for first two stages
+                if (state.stage === 1) {
+                    speedGrowth = 0.006;
+                    maxSpeed = 18;
+                } else if (state.stage === 2) {
+                    speedGrowth = 0.01;
+                    maxSpeed = 28;
+                } else if (state.stage === 3) {
+                    speedGrowth = 0.015;
+                    maxSpeed = 40;
+                }
+
+                state.speed = Math.min(maxSpeed, state.speed + speedGrowth * dt);
+                if (Math.random() < 0.0008) state.deadWindTimer = 350;
+            }
+
+            state.distance += (state.speed / 10) * dt;
+            state.score += (state.speed / 12) * dt;
+
+            let ns = 1;
+            if (state.distance > 10000) ns = 5;
+            else if (state.distance > 7000) ns = 4;
+            else if (state.distance > 4000) ns = 3;
+            else if (state.distance > 2000) ns = 2;
+
+            if (ns !== state.stage) {
+                state.stage = ns;
+                showStageNotice(ns);
+            }
+
+            // Movement
+            if (state.speed > 16) {
+                state.strain = Math.min(100, state.strain + 0.08 * dt);
+                state.stats.aggressive += dt;
+            } else {
+                state.strain = Math.max(0, state.strain - 0.15 * dt);
+            }
+
+            let lerp = state.strain > 75 ? 0.05 : 0.15;
+            if (state.strain > 75) {
+                state.playerX += (Math.random() - 0.5) * (state.strain - 75) * 0.4;
+            }
+            state.playerX += (state.targetX - state.playerX) * lerp * dt;
+            state.playerX = Math.max(30, Math.min(state.screen.w - 30, state.playerX));
+
+            // Timers & Spawns
+            state.spawnTimer -= dt;
+            state.collectibleTimer -= dt;
+            state.invincible -= dt;
+            if (state.shieldActive > 0) state.shieldActive -= dt;
+            if (state.boostTimer > 0) state.boostTimer -= dt;
+
+            const sizeScale = state.screen.w < 768 ? 0.55 : 1.0;
+
+            if (state.spawnTimer <= 0 && state.deadWindTimer <= 0) {
+                const types = ['FOG', 'WAVE', 'WOOD'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                state.obstacles.push({
+                    x: Math.random() * (state.screen.w - 100) + 50,
+                    y: -100,
+                    w: (type === 'FOG' ? 140 : 100) * sizeScale,
+                    h: (type === 'WOOD' ? 25 : 50) * sizeScale,
+                    type,
+                    active: true
+                });
+                state.spawnTimer = Math.max(10, (100 - state.speed * 2) / (1 + state.stage * 0.3));
+            }
+
+            if (state.collectibleTimer <= 0) {
+                const type = Math.random() > 0.85 ? 'SHIELD' : 'STAR';
+                state.collectibles.push({
+                    x: Math.random() * (state.screen.w - 100) + 50,
+                    y: -100,
+                    w: 40 * sizeScale,
+                    type,
+                    active: true
+                });
+                state.collectibleTimer = Math.random() * 180 + 120;
+            }
+
+            // Collisions
+            state.obstacles.forEach(o => {
+                o.y += state.speed * dt;
+                const playerY = state.screen.h - 150;
+                if (o.active && state.invincible <= 0 && Math.abs(o.x - state.playerX) < (o.w / 2 + 10 * sizeScale) && Math.abs(o.y - playerY) < (30 * sizeScale)) {
+                    if (state.shieldActive > 0) {
+                        state.shieldActive = 0;
+                        o.active = false;
+                        sounds.relax.play();
+                    } else {
+                        o.active = false;
+                        state.lives--;
+                        state.speed *= 0.55;
+                        state.strain = Math.min(100, state.strain + 45);
+                        state.invincible = 80;
+                        state.combo = 0;
+                        sounds.hit.play();
+                        if (state.lives <= 0) endSettlement();
+                    }
+                }
+            });
+
+            state.collectibles.forEach(c => {
+                c.y += state.speed * dt;
+                const playerY = state.screen.h - 150;
+                if (c.active && Math.abs(c.x - state.playerX) < (35 * sizeScale) && Math.abs(c.y - playerY) < (35 * sizeScale)) {
+                    c.active = false;
+                    sounds.collect.play();
+                    if (c.type === 'STAR') {
+                        state.stats.obsession++;
+                        state.combo++;
+                        state.boostTimer = 40; // Brief boost
+                        state.maxCombo = Math.max(state.maxCombo, state.combo);
+                        state.score += 700 * (1 + state.combo * 0.15);
+                    } else {
+                        state.shieldActive = 350;
+                        state.stats.relaxCollected++;
+                        state.strain = 0;
+                    }
+                }
+            });
+
+            state.obstacles = state.obstacles.filter(o => o.active && o.y < state.screen.h + 200);
+            state.collectibles = state.collectibles.filter(c => c.active && c.y < state.screen.h + 200);
+
+            updateHUD();
+        }
+
+        // --- DRAWING ---
+        function draw() {
+            ctx.clearRect(0, 0, state.screen.w, state.screen.h);
+
+            // BG Based on State/Stage
+            let g = ctx.createLinearGradient(0, 0, 0, state.screen.h);
+            const stageColors = [
+                ['#334155', '#1e293b'], // Fog
+                ['#1e1b4b', '#0f172a'], // Storm
+                ['#1e1b4b', '#4338ca'], // Starry
+                ['#0c4a6e', '#082f49'], // Deep
+                ['#0ea5e9', '#fef08a']  // Clear
+            ];
+            const menuColors = ['#0f172a', '#1e1b4b'];
+            const endColors = ['#080a13', '#1e1b4b'];
+
+            let currentColors = stageColors[state.stage - 1];
+            if (state.gameState === 'GAMEOVER') currentColors = endColors;
+            if (state.gameState === 'START' || state.gameState === 'INTRO' || state.gameState === 'GUIDE') currentColors = menuColors;
+
+            g.addColorStop(0, currentColors[0]);
+            g.addColorStop(1, currentColors[1]);
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, state.screen.w, state.screen.h);
+
+            // Stars for Post-game or Menu
+            if (state.gameState === 'GAMEOVER' || state.gameState === 'START' || state.gameState === 'INTRO' || state.gameState === 'GUIDE') {
+                const isOver = state.gameState === 'GAMEOVER';
+                const isIntro = state.gameState === 'INTRO' || state.gameState === 'GUIDE';
+                const alphaMult = isOver ? 0.8 : (isIntro ? 0.6 : 0.3);
+                state.stars.forEach(s => {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${s.o * alphaMult})`;
+                    ctx.beginPath(); ctx.arc(s.x * state.screen.w, s.y * state.screen.h, s.s, 0, Math.PI * 2); ctx.fill();
+                });
+
+                if (state.meteors && isIntro) {
+                    state.meteors.forEach(m => {
+                        let g = ctx.createLinearGradient(m.x, m.y, m.x + m.len * 0.4, m.y - m.len);
+                        g.addColorStop(0, 'rgba(255,255,255,0.7)');
+                        g.addColorStop(0.1, 'rgba(125,211,252,0.4)');
+                        g.addColorStop(1, 'transparent');
+                        ctx.strokeStyle = g; ctx.lineWidth = 2.5;
+                        ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x + m.len * 0.4, m.y - m.len); ctx.stroke();
+                        // Head glow
+                        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                        ctx.beginPath(); ctx.arc(m.x, m.y, 1.2, 0, Math.PI * 2); ctx.fill();
+                    });
+                }
+            }
+
+            // Water Texture
+            const isPlaying = state.gameState === 'PLAYING';
+            ctx.strokeStyle = isPlaying ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 1.5;
+            const waterTime = Date.now() / 2500;
+            const waveSpeed = isPlaying ? state.speed / 10 : 0.8;
+            for (let i = 0; i < 7; i++) {
+                ctx.beginPath();
+                let yOff = (state.screen.h / 7) * i + Math.sin(waterTime + i) * 22;
+                ctx.moveTo(0, yOff);
+                for (let x = 0; x <= state.screen.w; x += 30) {
+                    ctx.lineTo(x, yOff + Math.sin(x / 100 + waterTime * waveSpeed + i) * 18);
+                }
+                ctx.stroke();
+            }
+
+            // Seagulls
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 1.0;
+            const birdTime = Date.now() / 18000;
+            for (let i = 0; i < 8; i++) {
+                const sx = (state.screen.w * (i / 8) + birdTime * state.screen.w * 2) % (state.screen.w + 600) - 300;
+                const sy = 60 + Math.sin(birdTime * 15 + i * 2.5) * 40;
+                const wing = Math.sin(Date.now() / (300 + i * 50)) * 6;
+                ctx.beginPath();
+                // Left wing
+                ctx.moveTo(sx - 12, sy + wing); ctx.quadraticCurveTo(sx - 6, sy - 4, sx, sy);
+                // Right wing
+                ctx.moveTo(sx, sy); ctx.quadraticCurveTo(sx + 6, sy - 4, sx + 12, sy + wing);
+                ctx.stroke();
+            }
+
+            // Speed Lines
+            if (isPlaying && state.speed > 18) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                for (let i = 0; i < 18; i++) {
+                    let lx = (i * 149 + state.stats.totalTime * 20) % state.screen.w;
+                    let ly = (Date.now() + i * 600) % state.screen.h;
+                    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly + 60); ctx.stroke();
+                }
+            }
+
+            // Obstacles
+            state.obstacles.forEach(o => {
+                ctx.save();
+                ctx.translate(o.x, o.y);
+                if (o.type === 'FOG') {
+                    let rg = ctx.createRadialGradient(0, 0, 0, 0, 0, o.w / 2);
+                    rg.addColorStop(0, 'rgba(255,255,255,0.4)'); rg.addColorStop(1, 'transparent');
+                    ctx.fillStyle = rg;
+                    ctx.beginPath(); ctx.arc(0, 0, o.w / 2, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.moveTo(0, -10); ctx.lineTo(0, 10); ctx.stroke();
+                } else if (o.type === 'WAVE') {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 3;
+                    for (let i = -1; i <= 1; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(-o.w / 3, i * 15);
+                        ctx.quadraticCurveTo(0, i * 15 - 15, o.w / 3, i * 15);
+                        ctx.stroke();
+                    }
+                } else {
+                    ctx.fillStyle = '#3d2517';
+                    const rw = o.w * 0.8, rh = 20;
+                    ctx.beginPath(); ctx.roundRect(-rw / 2, -rh / 2, rw, rh, 5); ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(-rw / 4, -rh / 2); ctx.lineTo(-rw / 4, rh / 2);
+                    ctx.moveTo(rw / 4, -rh / 2); ctx.lineTo(rw / 4, rh / 2); ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // Collectibles
+            state.collectibles.forEach(c => {
+                ctx.save(); ctx.translate(c.x, c.y);
+                ctx.fillStyle = c.type === 'STAR' ? '#fbbf24' : '#38bdf8';
+                ctx.shadowBlur = 20; ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath();
+                if (c.type === 'STAR') {
+                    for (let i = 0; i < 5; i++) {
+                        ctx.lineTo(Math.cos((18 + i * 72) * Math.PI / 180) * 18, Math.sin((18 + i * 72) * Math.PI / 180) * 18);
+                        ctx.lineTo(Math.cos((54 + i * 72) * Math.PI / 180) * 9, Math.sin((54 + i * 72) * Math.PI / 180) * 9);
+                    }
+                    ctx.fill();
+                } else {
+                    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // Player Ship
+            if (state.gameState !== 'GAMEOVER') {
+                if (state.invincible <= 0 || Math.floor(state.invincible / 4) % 2 === 0) {
+                    let px = state.playerX, py = state.screen.h - 150;
+                    let tilt = (state.playerX - state.targetX) * -0.012;
+                    let rock = Math.sin(Date.now() / 250) * 0.05 * (1 + state.strain / 40);
+
+                    const isMenu = state.gameState === 'START' || state.gameState === 'INTRO' || state.gameState === 'GUIDE';
+                    if (isMenu) {
+                        px = state.screen.w / 2;
+                        py = state.screen.h / 1.45;
+                        rock = Math.sin(Date.now() / 500) * 0.1;
+                        tilt = Math.sin(Date.now() / 900) * 0.04;
+                    }
+
+                    const shipScale = state.screen.w < 768 ? 0.65 : 1.0;
+                    ctx.save();
+                    ctx.translate(px, py);
+                    ctx.rotate(tilt + rock);
+                    ctx.scale(shipScale, shipScale);
+
+                    if (state.shieldActive > 0) {
+                        ctx.beginPath(); ctx.arc(0, 0, 60, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.globalAlpha = 0.6 + Math.sin(Date.now() / 120) * 0.25;
+                        ctx.stroke(); ctx.globalAlpha = 1;
+                    }
+
+                    if (state.boostTimer > 0) {
+                        ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)'; ctx.lineWidth = 40;
+                        ctx.beginPath(); ctx.moveTo(0, 40); ctx.lineTo(0, 100); ctx.stroke();
+                        ctx.strokeStyle = 'rgba(251, 191, 36, 0.2)'; ctx.lineWidth = 20;
+                        ctx.beginPath(); ctx.moveTo(0, 40); ctx.lineTo(0, 150); ctx.stroke();
+                    }
+
+                    ctx.fillStyle = isPlaying && state.strain > 80 ? '#fb7185' : 'white';
+                    ctx.beginPath(); ctx.moveTo(-18, 35); ctx.lineTo(18, 35); ctx.quadraticCurveTo(25, 28, 25, 18); ctx.lineTo(0, 45); ctx.lineTo(-25, 18); ctx.quadraticCurveTo(-25, 28, -18, 35); ctx.fill();
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.beginPath(); ctx.moveTo(0, -45); ctx.lineTo(35, 25); ctx.quadraticCurveTo(0, 20, -35, 25); ctx.fill();
+                    ctx.strokeStyle = '#64748b'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(0, 38); ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        }
+
+        // --- UI REPLICAS ---
+        function updateHUD() {
+            document.getElementById('hud-distance').innerHTML = `${Math.floor(state.distance)}<span class="text-[10px] md:text-xs ml-1 opacity-50">m</span>`;
+            document.getElementById('hud-combo').innerText = `x${state.combo}`;
+
+            const cont = document.getElementById('lives-container');
+            if (cont) {
+                cont.innerHTML = '';
+                for (let i = 0; i < 3; i++) {
+                    const heart = document.createElement('div');
+                    heart.className = `w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-full transition-all duration-500 ${i < state.lives ? (state.strain > 80 ? 'bg-rose-500' : 'bg-amber-400') : 'bg-white/10'}`;
+                    cont.appendChild(heart);
+                }
+            }
+        }
+
+        function showStageNotice(s) {
+            const names = ["迷雾海域", "风浪海域", "星落海域", "深海静谧", "寻获真我"];
+            const notice = document.getElementById('stage-notice');
+            const noticeName = document.getElementById('stage-name-notice');
+            const hudPill = document.getElementById('hud-stage-pill');
+
+            if (noticeName) noticeName.innerText = names[s - 1];
+            if (hudPill) hudPill.innerText = `Stage ${s}: ${names[s - 1]}`;
+
+            if (notice) {
+                notice.classList.remove('hidden');
+                notice.classList.add('stage-anim');
+                setTimeout(() => notice.classList.add('hidden'), 2500);
+            }
+        }
+
+        function endSettlement() {
+            state.gameState = 'GAMEOVER';
+            if (sounds.bgm) sounds.bgm.stop();
+
+            // High Score Logic
+            if (state.distance > state.bestDistance) {
+                state.bestDistance = state.distance;
+                localStorage.setItem('odyssey_best_distance', Math.floor(state.bestDistance).toString());
+            }
+
+            document.getElementById('hud').style.opacity = '0';
+            const screen = document.getElementById('settlement-screen');
+            screen.classList.remove('hidden');
+            screen.classList.add('flex');
+
+            // Score Calculation
+            const finalScore = Math.floor(state.distance + (state.maxCombo * 50));
+            document.getElementById('final-score').innerText = finalScore.toLocaleString();
+            document.getElementById('final-combo').innerText = state.maxCombo;
+
+            // Mapping based on distance
+            let rating = '归程旅人', desc = '初见心海', color = 'text-slate-400', feedback = '不必急于求成，海面下的每一个波澜，都在为您积蓄破浪的勇气。';
+            let iconPath = '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>';
+
+            if (state.distance > 3000) {
+                rating = '心海大师'; desc = '彼岸花开'; color = 'text-amber-500';
+                feedback = '您已完全主宰了自己的航线，在静谧中洞察了生命的真谛。';
+                iconPath = '<circle cx="12" cy="12" r="4"/><path d="m19 12-2 2"/><path d="m5 12 2-2"/><path d="m12 19 2-2"/><path d="m12 5-2 2"/>';
+            } else if (state.distance > 1500) {
+                rating = '寻星者'; desc = '破浪前行'; color = 'text-sky-500';
+                feedback = '在起伏中保持优雅，即使风疾浪高，也不曾动摇内心的锚点。';
+                iconPath = '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>';
+            } else if (state.distance > 500) {
+                rating = '稳航者'; desc = '渐入佳境'; color = 'text-emerald-500';
+                feedback = '每一次平稳的转舵，都是对未来最坚定的告白。加油，航海家！';
+                iconPath = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>';
+            }
+
+            const iconEl = document.getElementById('settlement-icon');
+            iconEl.innerHTML = iconPath;
+            iconEl.className = `${color} transition-colors duration-1000`;
+
+            document.getElementById('final-rating').innerText = rating;
+            document.getElementById('final-desc').innerText = desc;
+            document.getElementById('final-feedback').innerText = `“ ${feedback} ”`;
+
+            playSound('gameover');
+        }
+
+        function goFortune() {
+            document.getElementById('settlement-screen').classList.add('hidden');
+            const screen = document.getElementById('fortune-screen');
+            screen.classList.remove('hidden');
+            screen.classList.add('flex');
+            setTimeout(() => screen.classList.add('opacity-100'), 50);
+        }
+
+        function revealFortune() {
+            const canister = document.getElementById('sign-canister');
+            const progress = document.getElementById('canister-progress');
+            const revealBtn = document.getElementById('reveal-btn');
+
+            if (revealBtn.disabled) return;
+
+            canister.classList.add('shaking');
+            revealBtn.disabled = true;
+            revealBtn.style.opacity = '0.5';
+            revealBtn.innerText = '灵犀共鸣中...';
+            playSound('collect');
+
+            let p = 0;
+            const iv = setInterval(() => {
+                p += 5;
+                if (progress) progress.style.transform = `translateY(${p - 100}%)`;
+                if (p >= 105) {
+                    clearInterval(iv);
+                    setTimeout(() => {
+                        canister.classList.remove('shaking');
+                        document.getElementById('shaker-state').classList.add('hidden');
+                        document.getElementById('card-state').classList.remove('hidden');
+                        generateFortuneCard();
+                    }, 400);
+                }
+            }, 50);
+        }
+
+        function generateFortuneCard() {
+            const fKey = state.distance > 2000 ? 'stargazer' : (state.combo > 5 ? 'relaxed' : 'steady');
+            const f = fortuneLibrary[fKey] || fortuneLibrary.steady;
+
+            document.getElementById('card-title').innerText = f.title;
+            document.getElementById('card-type').innerText = f.type;
+            document.getElementById('card-tagline').innerText = f.tagline;
+            document.getElementById('card-content').innerText = f.content;
+            document.getElementById('card-motto').innerText = f.motto;
+            document.getElementById('card-icon').innerHTML = f.icon;
+            document.getElementById('card-icon-box').className = `inline-flex p-5 rounded-[2rem] bg-slate-50 border border-slate-100 ${f.color}`;
+
+            playSound('shield');
+        }
+
+        // Resizing & Input
+        window.addEventListener('resize', () => {
+            state.screen.w = window.innerWidth; state.screen.h = window.innerHeight;
+            canvas.width = state.screen.w; canvas.height = state.screen.h;
+        });
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+
+        const setTarget = (e) => {
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            state.targetX = x;
+        };
+        window.addEventListener('mousemove', setTarget);
+        window.addEventListener('touchmove', (e) => { e.preventDefault(); setTarget(e); }, { passive: false });
+
+        function loop(time) {
+            const dt = state.lastTime ? (time - state.lastTime) / 16.67 : 1;
+            state.lastTime = time;
+            update(dt);
+            draw();
+            requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
